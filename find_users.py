@@ -32,46 +32,34 @@ def fetch_count(username, token, samples=5):
     -------
     int
     """
+    filename = 'users.csv'
     counts = []
-    for i in range(samples):
-        resp = requests.get(
-            'https://api.github.com/search/code?q=nbformat_minor+extension:ipynb',
-            auth=(username, token)
-        )
-        resp.raise_for_status()
-        counts.append(resp.json()['total_count'])
-    return int(median(counts))
+    date = datetime.now().strftime('%Y-%m-%d')
 
-
-def store_count(date, count, filename='ipynb_counts.csv'):
-    """Reads the CSV containing the historical `year-month-day,count` pairs
-    and upserts the count for the current date.
-
-    Parameters
-    ----------
-    date: str
-        Date in year-month-day format
-    count: int
-        Count of ipynb files
-    filename: str
-        CSV filename
-    """
-    # Read the historical counts if the file containing them exists
-    if os.path.isfile(filename):
-        with open(filename) as fh:
-            lines = fh.readlines()
-        counts = dict(line.strip().split(',') for line in lines[1:])
-    else:
-        counts = {}
-
-    # Upsert the count for the given date
-    counts[date] = count
-
-    # Write out the CSV sorted by date
     with open(filename, 'w') as fh:
-        fh.write('date,hits\n')
-        for date in sorted(counts):
-            fh.write(f'{date},{counts[date]}\n')
+        fh.write('date,notebook_username,hits,notebook_name, notebook_url,url,username_id,repo_name,owner_url\n')
+        for i in range(samples):
+            resp = requests.get(
+                'https://api.github.com/search/code?q=nbformat_minor+extension:ipynb',
+                auth=(username, token)
+            )
+            resp.raise_for_status()
+
+        # Write out the CSV sorted by date
+
+            for notebook in resp.json()['items']:
+                notebook_name = notebook['name']
+                notebook_url = notebook['html_url']
+                url = notebook['repository']['url']
+                notebook_username = notebook['repository']['owner']['login']
+                username_id = notebook['repository']['owner']['id']
+                repo_name = notebook['repository']['name']
+                owner_url = notebook['repository']['owner']['url']
+
+                fh.write(f'{date},{notebook_username},{notebook_name},{notebook_url},{url},{username_id},{repo_name},{owner_url}\n')
+
+
+
 
 
 def execute_notebook(src='estimate.src.ipynb', dest='estimate.ipynb'):
@@ -98,7 +86,7 @@ def execute_notebook(src='estimate.src.ipynb', dest='estimate.ipynb'):
         nbformat.write(updated_nb, fp)
 
 
-def configure_ci_git(token, repo='parente/nbestimate'):
+def configure_ci_git(token, repo='datafied-world/nbestimate'):
     """Configures TravisCI to push to GitHub.
 
     Parameters
@@ -151,21 +139,21 @@ def main(argv):
 
     if not args.skip_fetch:
         print(f'Fetching count for {date}')
-        count = fetch_count('parente', token)
+        count = fetch_count('colestriler', token)
         print(f'Storing count {count} for {date}')
-        store_count(date, count)
 
-    if not args.skip_execute:
-        print('Executing notebook')
-        execute_notebook()
 
-    if not args.skip_push:
-        if os.getenv('TRAVIS'):
-            print('Configuring TravisCI for commit to GitHub')
-            configure_ci_git(token)
-        print('Conmitting and pushing update')
-        git_commit_and_push(date)
-        print('Complete. Visit http://nbviewer.jupyter.org/github/parente/nbestimate/blob/master/estimate.ipynb?flush_cache=true')
+    # if not args.skip_execute:
+    #     print('Executing notebook')
+    #     execute_notebook()
+
+    # if not args.skip_push:
+    #     if os.getenv('TRAVIS'):
+    #         print('Configuring TravisCI for commit to GitHub')
+    #         configure_ci_git(token)
+    #     print('Conmitting and pushing update')
+    #     git_commit_and_push(date)
+    #     print('Complete. Visit http://nbviewer.jupyter.org/github/parente/nbestimate/blob/master/estimate.ipynb?flush_cache=true')
 
 
 if __name__ == '__main__':
